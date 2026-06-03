@@ -1,3 +1,3 @@
-# Bluepritn plugin Installer 
+# Blueprint plugin Installer 
 
 Automatically reinstall your Blueprint plugins after a panel update!
