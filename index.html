@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blueprint Plugin Installer</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #070708;
+      --card-bg: #0f0f11;
+      --border: #222326;
+      --border-hover: #33353b;
+      --text-main: #f4f4f5;
+      --text-muted: #8e8e93;
+      --accent: #3b82f6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+      position: relative;
+    }
+
+    body::before {
+      content: "";
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.06) 0%, rgba(0,0,0,0) 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .container {
+      width: 680px;
+      max-width: 100%;
+      text-align: center;
+      z-index: 1;
+    }
+
+    .header-meta {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .badge-version {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    h1 {
+      font-size: 46px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .description {
+      color: var(--text-muted);
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Actions Stack Layout */
+    .actions-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 40px;
+      width: 100%;
+    }
+
+    .terminal {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      gap: 16px;
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    .terminal:hover {
+      border-color: var(--border-hover);
+    }
+
+    .code-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .prompt-symbol {
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 500;
+      user-select: none;
+    }
+
+    code {
+      color: #e4e4e7;
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      text-align: left;
+    }
+
+    /* Base Utility Buttons */
+    .btn-copy {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-copy:hover {
+      background: #1c1d22;
+      color: var(--text-main);
+    }
+
+    /* New full-width GitHub Link Button styled under the terminal */
+    .btn-github-link {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-github-link:hover {
+      border-color: var(--border-hover);
+      background: #131316;
+    }
+
+    .btn-github-link:active {
+      transform: scale(0.99);
+    }
+
+    .btn-github-link svg.logo-git {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .btn-github-link svg.arrow-git {
+      width: 14px;
+      height: 14px;
+      color: var(--text-muted);
+      transition: transform 0.2s ease;
+    }
+
+    .btn-github-link:hover svg.arrow-git {
+      transform: translate(2px, -2px);
+      color: var(--text-main);
+    }
+
+    /* Features Section */
+    .features-grid {
+      border-top: 1px solid var(--border);
+      padding-top: 32px;
+      text-align: left;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .feature-item h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .feature-item p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .success-icon {
+      display: none;
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header-meta">
+      <span class="badge">Blueprint Tool</span>
+      <span class="badge badge-version" id="version-tag">Loading...</span>
+    </div>
+
+    <h1>Try it right now</h1>
+    <p class="description">
+      An interactive, production-ready script to automatically batch-reinstall and repair your Blueprint extensions on Pterodactyl.
+    </p>
+
+    <div class="actions-stack">
+      <div class="terminal">
+        <div class="code-container">
+          <span class="prompt-symbol">$</span>
+          <code id="command">curl -fsSL https://raw.githubusercontent.com/luoxthedev/plugin-installer-for-blueprint/main/install.sh | bash</code>
+        </div>
+
+        <button class="btn-copy" id="copyBtn" onclick="copyCommand()" aria-label="Copy command">
+          <svg class="copy-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width: 18px; height: 18px;">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <svg class="success-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width: 18px; height: 18px;">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <a href="https://github.com/luoxthedev/plugin-installer-for-blueprint" target="_blank" class="btn-github-link">
+        <svg class="logo-git" viewBox="0 0 24 24">
+          <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+        </svg>
+        <span>View on GitHub</span>
+        <svg class="arrow-git" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="7" y1="17" x2="17" y2="7"></line>
+          <polyline points="7 7 17 7 17 17"></polyline>
+        </svg>
+      </a>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-item">
+        <h3>🔍 Auto-Discovery</h3>
+        <p>Scans your Pterodactyl folders to map all installed components and extract their precise version profiles.</p>
+      </div>
+      <div class="feature-item">
+        <h3>⚙️ Global CLI Integration</h3>
+        <p>Permanently registers itself as <code>blueprint-plugin-installer</code> for execution from anywhere at any time.</p>
+      </div>
+      <div class="feature-item">
+        <h3>🛡️ Laravel Optimizations</h3>
+        <p>Automatically purges caches, forces database migrations, updates user permissions, and restarts active queue workers.</p>
+      </div>
+      <div class="feature-item">
+        <h3>📊 Smart Summary</h3>
+        <p>Provides a clean interactive selection menu and displays final reports isolating any broken packages.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Fix du bouton de copie
+    function copyCommand() {
+      const text = document.getElementById("command").innerText;
+      const btn = document.getElementById("copyBtn");
+      const copyIcon = btn.querySelector(".copy-icon");
+      const successIcon = btn.querySelector(".success-icon");
+
+      navigator.clipboard.writeText(text).then(() => {
+        copyIcon.style.display = "none";
+        successIcon.style.display = "block";
+        btn.style.background = "rgba(52, 211, 153, 0.1)";
+        
+        setTimeout(() => {
+          copyIcon.style.display = "block";
+          successIcon.style.display = "none";
+          btn.style.background = "transparent";
+        }, 2000);
+      });
+    }
+
+    // Récupération dynamique de la release GitHub
+    async function fetchLatestVersion() {
+      const el = document.getElementById("version-tag");
+      try {
+        const response = await fetch("https://api.github.com/repos/luoxthedev/plugin-installer-for-blueprint/releases/latest");
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        el.innerText = data.tag_name;
+      } catch (err) {
+        el.innerText = "v1.0.0";
+      }
+    }
+    
+    fetchLatestVersion();
+  </script>
+
+</body>
+</html>
