@@ -49,27 +49,67 @@ check_root() {
     fi
 }
 
-# ── Dependency check ──────────────────────────────────────────────────────────
+# ── Dependency check & Auto-installer ─────────────────────────────────────────
 check_dependencies() {
     step "Checking dependencies..."
     local missing=()
+    local apt_packages=()
 
+    # Mapping entre la commande et le paquet apt réel
     for cmd in php composer curl unzip jq; do
         if command -v "$cmd" &>/dev/null; then
             success "$cmd is available"
         else
             warn "$cmd is NOT found"
             missing+=("$cmd")
+            
+            # Ajustement pour composer qui s'installe via le paquet 'composer' sur Debian
+            if [[ "$cmd" == "composer" ]]; then
+                apt_packages+=("composer")
+            elif [[ "$cmd" == "php" ]]; then
+                apt_packages+=("php-cli")
+            else
+                apt_packages+=("$cmd")
+            fi
         fi
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo ""
-        warn "Missing dependencies: ${missing[*]}"
-        echo -e "  ${DIM}Install them with: apt-get install -y ${missing[*]}${RESET}"
+        warn "Missing required dependencies: ${missing[*]}"
+        info "Updating package lists to calculate download size..."
+        
+        # Update discret pour rafraîchir les tailles de paquets
+        apt-get update -qq
+        
+        # Récupération de la taille requise via apt-get (simulation -s)
+        local size_info
+        size_info=$(apt-get install -s -y "${apt_packages[@]}" 2>/dev/null | grep -E "Need to get|after this operation" || true)
+        
+        # Extraction propre de l'espace disque additionnel requis
+        local disk_space="unknown size"
+        if [[ "$size_info" =~ ([0-9]+[[:space:]]*[kMGT]B)[[:space:]]of[[:space:]]additional ]]; then
+            disk_space="${BASH_REMATCH[1]}"
+        elif [[ "$size_info" =~ ([0-9,.]+[[:space:]]*[kMGT]b)[[:space:]]d\’espace ]]; then # Fallback selon la locale FR
+            disk_space="${BASH_REMATCH[1]}"
+        fi
+
         echo ""
-        read -rp "  Continue anyway? [y/N] " confirm
-        [[ "$confirm" =~ ^[Yy]$ ]] || { info "Aborted by user."; exit 0; }
+        info "Estimated disk space needed for installation: ${BOLD}$disk_space${RESET}"
+        read -rp "  Would you like to automatically install these dependencies now? [y/N] " confirm
+        
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            step "Installing missing dependencies..."
+            if apt-get install -y "${apt_packages[@]}"; then
+                success "All dependencies successfully installed!"
+            else
+                error "Failed to install dependencies automatically. Please run: apt-get install -y ${apt_packages[*]}"
+                exit 1
+            fi
+        else
+            info "Aborted by user. Missing tools prevent script execution."
+            exit 0
+        fi
     fi
 }
 
@@ -217,7 +257,7 @@ confirm_reinstall() {
     echo ""
     for p in "${SELECTED_PLUGINS[@]}"; do
         echo -e "    ${DIM}•${RESET} $p"
-    done
+    </done>
     echo ""
     warn "This will re-run Blueprint install for each selected plugin."
     warn "Existing plugin data in the database is NOT removed."
@@ -346,11 +386,9 @@ install_global_command() {
     if [[ ! -f "$target" ]]; then
         info "Installing global command 'blueprint-plugin-installer'..."
         
-        # Si le script est exécuté localement depuis un vrai fichier
         if [[ -f "$0" ]]; then
             cp "$(realpath "$0")" "$target"
         else
-            # Si exécuté via curl -fsSL ... | bash, on télécharge le fichier directement depuis GitHub
             curl -fsSL "https://raw.githubusercontent.com/luoxthedev/plugin-installer-for-blueprint/main/install.sh" -o "$target"
         fi
         
