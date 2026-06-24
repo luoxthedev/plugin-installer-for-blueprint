@@ -7,6 +7,8 @@
 
 set -euo pipefail
 
+VERSION="v1.2.0"
+
 # ── Colors & formatting ───────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,7 +30,7 @@ print_banner() {
     echo "  ██████╔╝███████╗╚██████╔╝███████╗██║     ██║  ██║██║██║ ╚████║   ██║   "
     echo "  ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝   ╚═╝   "
     echo -e "${RESET}"
-    echo -e "${DIM}  Blueprint Plugin Reinstaller — Pterodactyl Panel${RESET}"
+    echo -e "${DIM}  Blueprint Plugin Reinstaller — Pterodactyl Panel (${VERSION})${RESET}"
     echo -e "${DIM}  ─────────────────────────────────────────────────────────────${RESET}"
     echo ""
 }
@@ -47,6 +49,22 @@ check_root() {
         error "This script must be run as root (use sudo)."
         exit 1
     fi
+}
+
+# ── Update / Install Global Command ───────────────────────────────────────────
+sync_global_command() {
+    local target="/usr/local/bin/blueprint-plugin-installer"
+    
+    # On force la mise à jour pour que l'ancienne version buggée soit écrasée
+    info "Syncing and updating global command 'blueprint-plugin-installer'..."
+    
+    if [[ -f "$0" && "$(basename "$0")" == "install.sh" ]]; then
+        cp "$(realpath "$0")" "$target"
+    else
+        curl -fsSL "https://raw.githubusercontent.com/luoxthedev/plugin-installer-for-blueprint/main/install.sh" -o "$target"
+    fi
+    
+    chmod +x "$target"
 }
 
 # ── Dependency check & Auto-installer ─────────────────────────────────────────
@@ -143,7 +161,6 @@ detect_blueprint_path() {
 discover_plugins() {
     step "Scanning for .blueprint extension files..."
 
-    # Utilisation d'un find sécurisé pour éviter les crashs de set -e
     local files
     files=$(find "$PANEL_DIR" -maxdepth 1 -name "*.blueprint" -type f 2>/dev/null | sort || true)
 
@@ -188,12 +205,12 @@ ask_user() {
     echo -e "    ${CYAN}[Q]${RESET}  Quit"
     echo ""
     
-    # Correction du prompt read pour forcer l'attente de l'utilisateur
     local choice=""
     read -rp "  Your choice [A/S/Q]: " choice
     echo ""
 
-    case "${choiceuu:${choice^^}}" in
+    # Correction de la faute de frappe critique ici :
+    case "${choice^^}" in
         A)
             SELECTED_PLUGINS=("${PLUGINS[@]}")
             info "All ${#SELECTED_PLUGINS[@]} extensions will be reinstalled."
@@ -366,29 +383,11 @@ post_install() {
     success "Queue restarted."
 }
 
-# ── Install self as global command ────────────────────────────────────────────
-install_global_command() {
-    local target="/usr/local/bin/blueprint-plugin-installer"
-    
-    if [[ ! -f "$target" ]]; then
-        info "Installing global command 'blueprint-plugin-installer'..."
-        
-        if [[ -f "$0" ]]; then
-            cp "$(realpath "$0")" "$target"
-        else
-            curl -fsSL "https://raw.githubusercontent.com/luoxthedev/plugin-installer-for-blueprint/main/install.sh" -o "$target"
-        fi
-        
-        chmod +x "$target"
-        success "You can now run: ${BOLD}blueprint-plugin-installer${RESET} at any time."
-    fi
-}
-
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 main() {
     print_banner
     check_root
-    install_global_command
+    sync_global_command
     check_dependencies
     detect_blueprint_path
     discover_plugins
