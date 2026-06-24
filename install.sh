@@ -2,7 +2,7 @@
 # =============================================================================
 #  Blueprint Plugin Reinstaller
 #  Automatically reinstalls all Blueprint (Pterodactyl) plugins on this machine
-#  https://github.com/YOUR_USERNAME/blueprint-plugin-installer
+#  https://github.com/luoxthedev/plugin-installer-for-blueprint
 # =============================================================================
 
 set -euo pipefail
@@ -278,7 +278,6 @@ reinstall_plugins() {
         echo -e "  ${BOLD}[$num/$total]${RESET} Installing ${CYAN}${plugin}${RESET}..."
 
         # Blueprint re-install command:
-        # blueprint.sh -install <extension_identifier>
         if bash "$BLUEPRINT_CLI" -install "$plugin" 2>&1 | \
                sed 's/^/          /'; then
             success "[$num/$total] ${plugin} — done"
@@ -343,9 +342,18 @@ post_install() {
 # ── Install self as global command ────────────────────────────────────────────
 install_global_command() {
     local target="/usr/local/bin/blueprint-plugin-installer"
+    
     if [[ ! -f "$target" ]]; then
         info "Installing global command 'blueprint-plugin-installer'..."
-        cp "$(realpath "$0")" "$target"
+        
+        # Si le script est exécuté localement depuis un vrai fichier
+        if [[ -f "$0" ]]; then
+            cp "$(realpath "$0")" "$target"
+        else
+            # Si exécuté via curl -fsSL ... | bash, on télécharge le fichier directement depuis GitHub
+            curl -fsSL "https://raw.githubusercontent.com/luoxthedev/plugin-installer-for-blueprint/main/install.sh" -o "$target"
+        fi
+        
         chmod +x "$target"
         success "You can now run: ${BOLD}blueprint-plugin-installer${RESET} at any time."
     fi
