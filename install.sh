@@ -143,15 +143,20 @@ detect_blueprint_path() {
 discover_plugins() {
     step "Scanning for .blueprint extension files..."
 
-    # Recherche des fichiers .blueprint à la racine de Pterodactyl
-    mapfile -t BLUEPRINT_FILES < <(find "$PANEL_DIR" -maxdepth 1 -name "*.blueprint" -type f 2>/dev/null | sort)
+    # Utilisation d'un find sécurisé pour éviter les crashs de set -e
+    local files
+    files=$(find "$PANEL_DIR" -maxdepth 1 -name "*.blueprint" -type f 2>/dev/null | sort || true)
 
     PLUGINS=()
-    for file in "${BLUEPRINT_FILES[@]}"; do
-        local name
-        name=$(basename "$file" .blueprint)
-        PLUGINS+=("$name")
-    done
+    if [[ -n "$files" ]]; then
+        while read -r file; do
+            if [[ -n "$file" ]]; then
+                local name
+                name=$(basename "$file" .blueprint)
+                PLUGINS+=("$name")
+            fi
+        done <<< "$files"
+    fi
 
     local count=${#PLUGINS[@]}
 
@@ -182,10 +187,13 @@ ask_user() {
     echo -e "    ${CYAN}[S]${RESET}  Select specific extensions"
     echo -e "    ${CYAN}[Q]${RESET}  Quit"
     echo ""
-    read -rp "  Your choice [A/S/Q]: " CHOICE
+    
+    # Correction du prompt read pour forcer l'attente de l'utilisateur
+    local choice=""
+    read -rp "  Your choice [A/S/Q]: " choice
     echo ""
 
-    case "${CHOICE^^}" in
+    case "${choiceuu:${choice^^}}" in
         A)
             SELECTED_PLUGINS=("${PLUGINS[@]}")
             info "All ${#SELECTED_PLUGINS[@]} extensions will be reinstalled."
@@ -209,11 +217,12 @@ select_plugins() {
     echo -e "  Enter the ${BOLD}numbers${RESET} of the extensions to reinstall, separated by spaces."
     echo -e "  Example: ${DIM}1 3 5${RESET}"
     echo ""
-    read -rp "  Extensions: " -a RAW_INDICES
+    local raw_indices=()
+    read -rp "  Extensions: " -a raw_indices
     echo ""
 
     SELECTED_PLUGINS=()
-    for idx in "${RAW_INDICES[@]}"; do
+    for idx in "${raw_indices[@]}"; do
         if [[ "$idx" =~ ^[0-9]+$ ]] && (( idx >= 1 && idx <= ${#PLUGINS[@]} )); then
             SELECTED_PLUGINS+=("${PLUGINS[$((idx-1))]}")
         else
@@ -242,8 +251,9 @@ confirm_reinstall() {
     warn "This will re-run the Blueprint framework install command."
     warn "Existing data in the database is NOT removed."
     echo ""
-    read -rp "  Confirm reinstall? [y/N] " CONFIRM
-    [[ "$CONFIRM" =~ ^[Yy]$ ]] || { info "Aborted by user."; exit 0; }
+    local confirm=""
+    read -rp "  Confirm reinstall? [y/N] " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] || { info "Aborted by user."; exit 0; }
     echo ""
 }
 
@@ -296,9 +306,7 @@ reinstall_plugins() {
 
         echo -e "  ${BOLD}[$num/$total]${RESET} Installing ${CYAN}${plugin}.blueprint${RESET}..."
 
-        # Exécution de la commande d'installation via l'exécutable Blueprint détecté
-        if bash "$BLUEPRINT_CLI" -install "$plugin" 2>&1 | \
-               sed 's/^/          /'; then
+        if bash "$BLUEPRINT_CLI" -install "$plugin" 2>&1 | sed 's/^/          /'; then
             success "[$num/$total] ${plugin} — done"
             (( success_count++ )) || true
         else
