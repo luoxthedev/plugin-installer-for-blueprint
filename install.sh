@@ -55,7 +55,6 @@ check_dependencies() {
     local missing=()
     local apt_packages=()
 
-    # Mapping entre la commande et le paquet apt réel
     for cmd in php composer curl unzip jq; do
         if command -v "$cmd" &>/dev/null; then
             success "$cmd is available"
@@ -63,7 +62,6 @@ check_dependencies() {
             warn "$cmd is NOT found"
             missing+=("$cmd")
             
-            # Ajustement pour composer qui s'installe via le paquet 'composer' sur Debian
             if [[ "$cmd" == "composer" ]]; then
                 apt_packages+=("composer")
             elif [[ "$cmd" == "php" ]]; then
@@ -79,18 +77,15 @@ check_dependencies() {
         warn "Missing required dependencies: ${missing[*]}"
         info "Updating package lists to calculate download size..."
         
-        # Update discret pour rafraîchir les tailles de paquets
         apt-get update -qq
         
-        # Récupération de la taille requise via apt-get (simulation -s)
         local size_info
         size_info=$(apt-get install -s -y "${apt_packages[@]}" 2>/dev/null | grep -E "Need to get|after this operation" || true)
         
-        # Extraction propre de l'espace disque additionnel requis
         local disk_space="unknown size"
         if [[ "$size_info" =~ ([0-9]+[[:space:]]*[kMGT]B)[[:space:]]of[[:space:]]additional ]]; then
             disk_space="${BASH_REMATCH[1]}"
-        elif [[ "$size_info" =~ ([0-9,.]+[[:space:]]*[kMGT]b)[[:space:]]d\’espace ]]; then # Fallback selon la locale FR
+        elif [[ "$size_info" =~ ([0-9,.]+[[:space:]]*[kMGT]b)[[:space:]]d\’espace ]]; then
             disk_space="${BASH_REMATCH[1]}"
         fi
 
@@ -113,9 +108,9 @@ check_dependencies() {
     fi
 }
 
-# ── Detect Blueprint install directory ────────────────────────────────────────
+# ── Detect Pterodactyl directory ──────────────────────────────────────────────
 detect_blueprint_path() {
-    step "Detecting Blueprint installation..."
+    step "Detecting Pterodactyl installation..."
 
     local candidates=(
         "/var/www/pterodactyl"
@@ -126,14 +121,14 @@ detect_blueprint_path() {
 
     PANEL_DIR=""
     for dir in "${candidates[@]}"; do
-        if [[ -f "$dir/config/app.php" ]] && [[ -d "$dir/blueprint" ]]; then
+        if [[ -f "$dir/config/app.php" ]]; then
             PANEL_DIR="$dir"
             break
         fi
     done
 
     if [[ -z "$PANEL_DIR" ]]; then
-        warn "Could not auto-detect Pterodactyl + Blueprint directory."
+        warn "Could not auto-detect Pterodactyl directory."
         read -rp "  Enter the panel root path manually: " PANEL_DIR
         if [[ ! -d "$PANEL_DIR" ]]; then
             error "Directory '$PANEL_DIR' does not exist. Aborting."
@@ -142,26 +137,19 @@ detect_blueprint_path() {
     fi
 
     success "Panel found at: ${BOLD}$PANEL_DIR${RESET}"
-    BLUEPRINT_DIR="$PANEL_DIR/blueprint"
-    EXTENSIONS_DIR="$BLUEPRINT_DIR/extensions"
 }
 
-# ── Discover installed plugins ────────────────────────────────────────────────
+# ── Discover .blueprint files ─────────────────────────────────────────────────
 discover_plugins() {
-    step "Scanning for installed Blueprint plugins..."
+    step "Scanning for .blueprint extension files..."
 
-    if [[ ! -d "$EXTENSIONS_DIR" ]]; then
-        error "Extensions directory not found: $EXTENSIONS_DIR"
-        error "Make sure Blueprint is properly installed."
-        exit 1
-    fi
-
-    mapfile -t PLUGIN_DIRS < <(find "$EXTENSIONS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    # Recherche des fichiers .blueprint à la racine de Pterodactyl
+    mapfile -t BLUEPRINT_FILES < <(find "$PANEL_DIR" -maxdepth 1 -name "*.blueprint" -type f 2>/dev/null | sort)
 
     PLUGINS=()
-    for dir in "${PLUGIN_DIRS[@]}"; do
+    for file in "${BLUEPRINT_FILES[@]}"; do
         local name
-        name=$(basename "$dir")
+        name=$(basename "$file" .blueprint)
         PLUGINS+=("$name")
     done
 
@@ -171,23 +159,15 @@ discover_plugins() {
     divider
 
     if [[ $count -eq 0 ]]; then
-        warn "No Blueprint plugins were found in $EXTENSIONS_DIR"
+        warn "No '.blueprint' files were found in $PANEL_DIR"
         exit 0
     fi
 
-    echo -e "  ${GREEN}${BOLD}Found $count plugin(s):${RESET}"
+    echo -e "  ${GREEN}${BOLD}Found $count extension file(s):${RESET}"
     echo ""
     for i in "${!PLUGINS[@]}"; do
         local num=$((i + 1))
-        local pname="${PLUGINS[$i]}"
-        local conf="$EXTENSIONS_DIR/$pname/conf.yml"
-        local version="unknown"
-
-        if [[ -f "$conf" ]]; then
-            version=$(grep -i '^version:' "$conf" 2>/dev/null | awk '{print $2}' | tr -d '"' | head -1 || echo "unknown")
-        fi
-
-        printf "  ${DIM}%2d.${RESET}  ${BOLD}%-28s${RESET} ${DIM}v%s${RESET}\n" "$num" "$pname" "$version"
+        printf "  ${DIM}%2d.${RESET}  ${BOLD}%s.blueprint${RESET}\n" "$num" "${PLUGINS[$i]}"
     done
 
     divider
@@ -198,8 +178,8 @@ discover_plugins() {
 ask_user() {
     echo -e "  ${BOLD}What would you like to do?${RESET}"
     echo ""
-    echo -e "    ${CYAN}[A]${RESET}  Reinstall ALL plugins (${#PLUGINS[@]} total)"
-    echo -e "    ${CYAN}[S]${RESET}  Select specific plugins"
+    echo -e "    ${CYAN}[A]${RESET}  Reinstall ALL extensions (${#PLUGINS[@]} total)"
+    echo -e "    ${CYAN}[S]${RESET}  Select specific extensions"
     echo -e "    ${CYAN}[Q]${RESET}  Quit"
     echo ""
     read -rp "  Your choice [A/S/Q]: " CHOICE
@@ -208,7 +188,7 @@ ask_user() {
     case "${CHOICE^^}" in
         A)
             SELECTED_PLUGINS=("${PLUGINS[@]}")
-            info "All ${#SELECTED_PLUGINS[@]} plugins will be reinstalled."
+            info "All ${#SELECTED_PLUGINS[@]} extensions will be reinstalled."
             ;;
         S)
             select_plugins
@@ -226,10 +206,10 @@ ask_user() {
 
 # ── Manual selection ──────────────────────────────────────────────────────────
 select_plugins() {
-    echo -e "  Enter the ${BOLD}numbers${RESET} of the plugins to reinstall, separated by spaces."
+    echo -e "  Enter the ${BOLD}numbers${RESET} of the extensions to reinstall, separated by spaces."
     echo -e "  Example: ${DIM}1 3 5${RESET}"
     echo ""
-    read -rp "  Plugins: " -a RAW_INDICES
+    read -rp "  Extensions: " -a RAW_INDICES
     echo ""
 
     SELECTED_PLUGINS=()
@@ -242,7 +222,7 @@ select_plugins() {
     done
 
     if [[ ${#SELECTED_PLUGINS[@]} -eq 0 ]]; then
-        warn "No valid plugins selected. Aborting."
+        warn "No valid extensions selected. Aborting."
         exit 0
     fi
 
@@ -253,14 +233,14 @@ select_plugins() {
 confirm_reinstall() {
     local count=${#SELECTED_PLUGINS[@]}
     echo ""
-    echo -e "  ${YELLOW}${BOLD}⚠  You are about to REINSTALL $count plugin(s):${RESET}"
+    echo -e "  ${YELLOW}${BOLD}⚠  You are about to REINSTALL $count extension(s):${RESET}"
     echo ""
     for p in "${SELECTED_PLUGINS[@]}"; do
-        echo -e "    ${DIM}•${RESET} $p"
-    </done>
+        echo -e "    ${DIM}•${RESET} $p.blueprint"
+    done
     echo ""
-    warn "This will re-run Blueprint install for each selected plugin."
-    warn "Existing plugin data in the database is NOT removed."
+    warn "This will re-run the Blueprint framework install command."
+    warn "Existing data in the database is NOT removed."
     echo ""
     read -rp "  Confirm reinstall? [y/N] " CONFIRM
     [[ "$CONFIRM" =~ ^[Yy]$ ]] || { info "Aborted by user."; exit 0; }
@@ -285,14 +265,13 @@ find_blueprint_cli() {
     done
 
     if [[ -z "$BLUEPRINT_CLI" ]]; then
-        # Fallback: look for it anywhere in panel dir
         BLUEPRINT_CLI=$(find "$PANEL_DIR" -maxdepth 2 -name "blueprint.sh" -o -name "blueprint" \
                         2>/dev/null | head -1 || true)
     fi
 
     if [[ -z "$BLUEPRINT_CLI" ]]; then
         error "Could not find the Blueprint CLI (blueprint.sh) in $PANEL_DIR"
-        error "Please make sure Blueprint is correctly installed."
+        error "Please make sure Blueprint framework is correctly installed."
         exit 1
     fi
 
@@ -315,9 +294,9 @@ reinstall_plugins() {
         local plugin="${SELECTED_PLUGINS[$i]}"
         local num=$((i + 1))
 
-        echo -e "  ${BOLD}[$num/$total]${RESET} Installing ${CYAN}${plugin}${RESET}..."
+        echo -e "  ${BOLD}[$num/$total]${RESET} Installing ${CYAN}${plugin}.blueprint${RESET}..."
 
-        # Blueprint re-install command:
+        # Exécution de la commande d'installation via l'exécutable Blueprint détecté
         if bash "$BLUEPRINT_CLI" -install "$plugin" 2>&1 | \
                sed 's/^/          /'; then
             success "[$num/$total] ${plugin} — done"
@@ -341,9 +320,9 @@ reinstall_plugins() {
     if [[ $fail_count -gt 0 ]]; then
         echo -e "    ${RED}✘  Failed:${RESET}   $fail_count / $total"
         echo ""
-        echo -e "  ${RED}Failed plugins:${RESET}"
+        echo -e "  ${RED}Failed extensions:${RESET}"
         for p in "${failed_list[@]}"; do
-            echo -e "    ${DIM}•${RESET} $p"
+            echo -e "    ${DIM}•${RESET} $p.blueprint"
         done
     fi
 
@@ -412,7 +391,7 @@ main() {
     post_install
 
     echo ""
-    echo -e "  ${GREEN}${BOLD}✔  All done! Your Blueprint plugins have been reinstalled.${RESET}"
+    echo -e "  ${GREEN}${BOLD}✔  All done! Your Blueprint extensions have been reinstalled.${RESET}"
     echo -e "  ${DIM}If you encounter issues, check the logs in $PANEL_DIR/storage/logs/${RESET}"
     echo ""
 }
