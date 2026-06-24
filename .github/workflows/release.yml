@@ -1,9 +1,18 @@
-name: Draft & Publish Release
+name: Manual & Tagged Release
 
 on:
+  # Permet de lancer la release manuellement depuis l'onglet Actions
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.1.0)'
+        required: true
+        default: 'v1.1.0'
+
+  # Conserve aussi la détection automatique si jamais tu pousses un tag via Git
   push:
     tags:
-      - 'v*' # Se déclenche dès que tu crées un tag commençant par v (ex: v1.0.0, v1.1.0)
+      - 'v*'
 
 permissions:
   contents: write
@@ -17,15 +26,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Si c'est un lancement manuel, on doit créer le tag Git sur le dépôt d'abord
+      - name: Create Git Tag (Manual Run Only)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          git config private-user.email "action@github.com"
+          git config private-user.name "GitHub Action"
+          git tag ${{ github.event.inputs.version }}
+          git push origin ${{ github.event.inputs.version }}
+
+      # Génère automatiquement la liste des changements (Changelog)
       - name: Build Automated Changelog
         id: github_release
         uses: mikepenz/release-changelog-builder-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Crée la release officielle sur GitHub
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
           body: ${{ steps.github_release.outputs.changelog }}
           draft: false
           prerelease: false
