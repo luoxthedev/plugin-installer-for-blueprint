@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-VERSION="v1.2.0"
+VERSION="v1.3.0"
 
 # ── Colors & formatting ───────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -55,7 +55,6 @@ check_root() {
 sync_global_command() {
     local target="/usr/local/bin/blueprint-plugin-installer"
     
-    # On force la mise à jour pour que l'ancienne version buggée soit écrasée
     info "Syncing and updating global command 'blueprint-plugin-installer'..."
     
     if [[ -f "$0" && "$(basename "$0")" == "install.sh" ]]; then
@@ -73,10 +72,16 @@ check_dependencies() {
     local missing=()
     local apt_packages=()
 
-    for cmd in php composer curl unzip jq; do
+    for cmd in php composer curl unzip jq blueprint; do
         if command -v "$cmd" &>/dev/null; then
             success "$cmd is available"
         else
+            # On n'essaie pas d'installer 'blueprint' via apt s'il manque
+            if [[ "$cmd" == "blueprint" ]]; then
+                error "The 'blueprint' global command is missing. Please install Blueprint Framework first."
+                exit 1
+            fi
+
             warn "$cmd is NOT found"
             missing+=("$cmd")
             
@@ -109,7 +114,9 @@ check_dependencies() {
 
         echo ""
         info "Estimated disk space needed for installation: ${BOLD}$disk_space${RESET}"
-        read -rp "  Would you like to automatically install these dependencies now? [y/N] " confirm
+        
+        # </dev/tty force la lecture depuis le clavier même en mode curl | bash
+        read -rp "  Would you like to automatically install these dependencies now? [y/N] " confirm </dev/tty
         
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
             step "Installing missing dependencies..."
@@ -147,7 +154,7 @@ detect_blueprint_path() {
 
     if [[ -z "$PANEL_DIR" ]]; then
         warn "Could not auto-detect Pterodactyl directory."
-        read -rp "  Enter the panel root path manually: " PANEL_DIR
+        read -rp "  Enter the panel root path manually: " PANEL_DIR </dev/tty
         if [[ ! -d "$PANEL_DIR" ]]; then
             error "Directory '$PANEL_DIR' does not exist. Aborting."
             exit 1
@@ -206,10 +213,9 @@ ask_user() {
     echo ""
     
     local choice=""
-    read -rp "  Your choice [A/S/Q]: " choice
+    read -rp "  Your choice [A/S/Q]: " choice </dev/tty
     echo ""
 
-    # Correction de la faute de frappe critique ici :
     case "${choice^^}" in
         A)
             SELECTED_PLUGINS=("${PLUGINS[@]}")
@@ -235,7 +241,7 @@ select_plugins() {
     echo -e "  Example: ${DIM}1 3 5${RESET}"
     echo ""
     local raw_indices=()
-    read -rp "  Extensions: " -a raw_indices
+    read -rp "  Extensions: " -a raw_indices </dev/tty
     echo ""
 
     SELECTED_PLUGINS=()
@@ -269,40 +275,9 @@ confirm_reinstall() {
     warn "Existing data in the database is NOT removed."
     echo ""
     local confirm=""
-    read -rp "  Confirm reinstall? [y/N] " confirm
+    read -rp "  Confirm reinstall? [y/N] " confirm </dev/tty
     [[ "$confirm" =~ ^[Yy]$ ]] || { info "Aborted by user."; exit 0; }
     echo ""
-}
-
-# ── Find Blueprint CLI ────────────────────────────────────────────────────────
-find_blueprint_cli() {
-    BLUEPRINT_CLI=""
-
-    local candidates=(
-        "$PANEL_DIR/blueprint.sh"
-        "$PANEL_DIR/blueprint"
-        "/usr/local/bin/blueprint"
-    )
-
-    for c in "${candidates[@]}"; do
-        if [[ -x "$c" ]]; then
-            BLUEPRINT_CLI="$c"
-            break
-        fi
-    done
-
-    if [[ -z "$BLUEPRINT_CLI" ]]; then
-        BLUEPRINT_CLI=$(find "$PANEL_DIR" -maxdepth 2 -name "blueprint.sh" -o -name "blueprint" \
-                        2>/dev/null | head -1 || true)
-    fi
-
-    if [[ -z "$BLUEPRINT_CLI" ]]; then
-        error "Could not find the Blueprint CLI (blueprint.sh) in $PANEL_DIR"
-        error "Please make sure Blueprint framework is correctly installed."
-        exit 1
-    fi
-
-    success "Blueprint CLI found: $BLUEPRINT_CLI"
 }
 
 # ── Reinstall plugins ─────────────────────────────────────────────────────────
@@ -323,7 +298,8 @@ reinstall_plugins() {
 
         echo -e "  ${BOLD}[$num/$total]${RESET} Installing ${CYAN}${plugin}.blueprint${RESET}..."
 
-        if bash "$BLUEPRINT_CLI" -install "$plugin" 2>&1 | sed 's/^/          /'; then
+        # Correction ici : Utilisation directe de la commande globale 'blueprint -i'
+        if blueprint -i "$plugin" 2>&1 | sed 's/^/          /'; then
             success "[$num/$total] ${plugin} — done"
             (( success_count++ )) || true
         else
@@ -393,7 +369,6 @@ main() {
     discover_plugins
     ask_user
     confirm_reinstall
-    find_blueprint_cli
     reinstall_plugins
     post_install
 
